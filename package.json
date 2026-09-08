@@ -1,0 +1,26 @@
+{
+  "name": "rentahuman-line",
+  "version": "0.1.0",
+  "description": "Book someone to wait in line, from your terminal. Guest checkout, $20 USD/hour, AI-managed fulfillment.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rentahuman-ai/line-waiting-cli.git"
+  },
+  "bin": {
+    "rentahuman-line": "bin/rentahuman-line.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
