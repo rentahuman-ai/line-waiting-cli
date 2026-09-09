@@ -22,22 +22,26 @@ rentahuman-line cities
 rentahuman-line book
 ```
 
-The CLI prompts for the city, venue, street address, start time, duration, contact details, and handoff instructions. It shows the exact quote before preparing checkout. Open the returned payment link and pay. Then run `rentahuman-line status` to check payment, worker confirmation, and the AI report.
+The CLI prompts for the city, venue, street address, date, local start time, duration, contact details, and handoff instructions. Enter a date like `2026-10-01` or `tomorrow`, then a time like `9am` or `2:30pm`. The CLI handles the city's timezone automatically, even if your computer is in another timezone. It shows the local schedule and exact quote before preparing checkout. Open the returned payment link and pay. Then run `rentahuman-line status` to check payment, worker confirmation, and the AI report.
 
 ## Non-interactive booking
 
-Choose a date **at least 24 hours in the future**, within 30 days. Pay at least 24 hours before the scheduled start. Use the city's correct UTC offset on that date, or a UTC timestamp ending in `Z`. Invalid daylight-saving offsets are rejected.
+Choose a date **at least 24 hours in the future**, within 30 days. Pay at least 24 hours before the scheduled start. Enter the time as it appears on a clock in the selected city; no UTC conversion is needed.
 
 ```sh
 rentahuman-line book \
   --city nyc --venue "Your venue" --address "The venue's full street address" \
-  --start "2026-10-01T09:00-04:00" --hours 2 \
+  --date 2026-10-01 --time "9am" --hours 2 \
   --name "Alex" --email "alex@example.com" --phone "+12125551234" \
   --handoff "I will meet you at the entrance at 11am. Call me 15 minutes before." \
   --yes --json
 ```
 
 Replace the example date and venue with your actual booking. Use `quote` instead of `book` to validate details and inspect pricing without creating an order. `--yes` prepares a payment link; it does not charge a card.
+
+You can also use `--start "2026-10-01 9am"` or `--start "tomorrow 2:30pm"` instead of `--date` and `--time`. Dates accept `YYYY-MM-DD`, `today`, or `tomorrow`; times accept AM/PM or 24-hour format such as `14:30`. Relative dates use the selected city's calendar. The 24-hour minimum still applies, including to `tomorrow`.
+
+Daylight-saving changes are handled automatically. If a local time is skipped or occurs twice during a clock change, the CLI tells you to choose a different time instead of guessing. Existing `--start` timestamps with an explicit offset or `Z` remain supported for scripts and precise clock-change scheduling.
 
 Duration is 1–12 hours in half-hour increments. A two-hour booking costs **$40 USD total**. Worker compensation is displayed separately in the API quote; the included platform fee is deducted from the total. No purchases, tickets, or extra hours are authorized.
 
@@ -47,7 +51,7 @@ Duration is 1–12 hours in half-hour increments. A two-hour booking costs **$40
 rentahuman-line request --city Montreal
 ```
 
-The CLI collects the same details and saves a request without payment. Contact **support@rentahuman.ai** with your order ID for review and arrangements. `book` also switches unsupported cities to this request flow.
+The CLI collects the same details and saves a request without payment. For another city's local time, it also asks for a timezone name, such as `America/Montreal` (or pass `--timezone America/Montreal`). Contact **support@rentahuman.ai** with your order ID for review and arrangements. `book` also switches unsupported cities to this request flow.
 
 ## Private order files and retries
 
