@@ -5,6 +5,13 @@ import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 
+import {
+  cityTimezone,
+  formatLocalTime,
+  hasExplicitOffset,
+  localStart,
+} from './schedule.js';
+
 export const HELP = `RentAHuman Line Waiting
 
 Commands:
@@ -17,7 +24,9 @@ Commands:
 
 Booking flags (missing values are prompted in an interactive terminal):
   --city NYC --venue "Venue name" --address "Full street address"
-  --start "2026-10-01T09:00-04:00" --hours 2
+  --date 2026-10-01 --time "9am" --hours 2
+  --start "tomorrow 2pm"        Alternative to --date and --time
+  --timezone America/Montreal   Required for local times in other cities
   --name "Your name" --email "you@example.com" --phone "+12125551234"
   --handoff "Where and how you will take over" --notes "Optional details"
   --yes                         Confirm the displayed order non-interactively
@@ -27,6 +36,9 @@ Booking flags (missing values are prompted in an interactive terminal):
 $20 USD/hour total, fees included. Book and pay at least 24 hours ahead.
 1–12 hours, in 30-minute increments; dates up to 30 days ahead.
 NYC, Vancouver, Los Angeles, San Francisco, Toronto. Other cities by request.
+Dates and times use the selected city's timezone, not your computer's.
+Use YYYY-MM-DD, today, or tomorrow; times like 9am, 2:30pm, or 14:30.
+Existing --start timestamps with an explicit UTC offset or Z still work.
 No login or subscription. Pay once in hosted checkout. No extra hours or
 purchases are authorized. Payment starts recruitment; a worker must confirm.
 Keep your private order file to check status and resume without logging in.
@@ -130,43 +142,92 @@ export async function loadOrder(path) {
   return { ...order, base: apiBase(order.base) };
 }
 
-async function collectInput(flags, prompt) {
-  const fields = [
+export async function collectInput(flags, prompt, cities) {
+  const ask = async (key, label) => {
+    const value =
+      flags[key] ?? (prompt ? await prompt.question(`${label}: `) : '');
+    if (typeof value !== 'string' || !value.trim())
+      throw new Error(`--${key} is required in non-interactive mode.`);
+    return value.trim();
+  };
+  const values = {};
+  for (const [key, label] of [
     [
       'city',
       'City (NYC, Vancouver, Los Angeles, San Francisco, Toronto, or another city)',
     ],
     ['venue', 'Venue name'],
     ['address', 'Full street address'],
-    [
-      'start',
-      'Start time with local UTC offset (YYYY-MM-DDTHH:mm-04:00, for example)',
-    ],
+  ])
+    values[key] = await ask(key, label);
+  if (
+    flags.start !== undefined &&
+    (flags.date !== undefined || flags.time !== undefined)
+  )
+    throw new Error('Use either --start or --date with --time, not both.');
+  const knownTimezone = cityTimezone(values.city, cities);
+  if (knownTimezone && flags.timezone && flags.timezone !== knownTimezone)
+    throw new Error(
+      `Times for ${values.city} use ${knownTimezone}; omit --timezone.`
+    );
+  let timezone = knownTimezone ?? flags.timezone;
+  let startsAt;
+  if (flags.start && hasExplicitOffset(flags.start.trim())) {
+    startsAt = flags.start.trim();
+  } else {
+    timezone ??= await ask(
+      'timezone',
+      'Timezone for this city (for example, America/Montreal)'
+    );
+    // Validate before collecting a date so unsupported zones get a clear error.
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    } catch {
+      throw new Error('Unknown timezone. Use a name like America/Montreal.');
+    }
+    if (flags.start !== undefined) {
+      const start = /^(.*?)[T ]+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$/i.exec(
+        flags.start.trim()
+      );
+      if (!start)
+        throw new Error(
+          'Use --start "2026-10-01 9am" or --date 2026-10-01 --time "9am".'
+        );
+      startsAt = localStart(start[1], start[2], timezone);
+    } else {
+      const date = await ask(
+        'date',
+        `Date in ${values.city} (YYYY-MM-DD or tomorrow; at least 24 hours ahead)`
+      );
+      const time = await ask(
+        'time',
+        `Local start time in ${values.city} (9am, 2:30pm, or 14:30)`
+      );
+      startsAt = localStart(date, time, timezone);
+    }
+  }
+  for (const [key, label] of [
     ['hours', 'How many hours (1–12, half-hour increments)'],
     ['name', 'Your name'],
     ['email', 'Contact email'],
     ['phone', 'Phone with country code (+1...)'],
     ['handoff', 'How and where will you take the worker’s place?'],
-  ];
-  const values = {};
-  for (const [key, label] of fields) {
-    const value =
-      flags[key] ?? (prompt ? await prompt.question(`${label}: `) : '');
-    if (typeof value !== 'string' || !value.trim())
-      throw new Error(`--${key} is required in non-interactive mode.`);
-    values[key] = value.trim();
-  }
+  ])
+    values[key] = await ask(key, label);
   return {
-    city: values.city,
-    venue: values.venue,
-    address: values.address,
-    startsAt: values.start,
-    hours: Number(values.hours),
-    name: values.name,
-    email: values.email,
-    phone: values.phone,
-    handoff: values.handoff,
-    notes: flags.notes?.trim() ?? '',
+    timezone,
+    input: {
+      city: values.city,
+      venue: values.venue,
+      address: values.address,
+      startsAt,
+      hours: Number(values.hours),
+      name: values.name,
+      email: values.email,
+      phone: values.phone,
+      handoff: values.handoff,
+      notes: flags.notes?.trim() ?? '',
+    },
   };
 }
 
@@ -212,6 +273,9 @@ export async function main(args = process.argv.slice(2)) {
       venue: { type: 'string' },
       address: { type: 'string' },
       start: { type: 'string' },
+      date: { type: 'string' },
+      time: { type: 'string' },
+      timezone: { type: 'string' },
       hours: { type: 'string' },
       name: { type: 'string' },
       email: { type: 'string' },
@@ -271,20 +335,25 @@ export async function main(args = process.argv.slice(2)) {
       ? createInterface({ input: process.stdin, output: process.stderr })
       : null;
   try {
-    const input = await collectInput(flags, prompt);
+    const catalog = await api(base, '');
+    const { input, timezone } = await collectInput(
+      flags,
+      prompt,
+      catalog.cities
+    );
     const token = randomBytes(32).toString('hex');
     const quote = await api(base, '', token, { action: 'quote', input });
     if (command === 'quote') {
       printResult(quote, flags.json);
       if (!flags.json)
         process.stdout.write(
-          `Total: $${(quote.quote.totalCents / 100).toFixed(2)} USD\n`
+          `Start: ${formatLocalTime(input.startsAt, timezone)}\nTotal: $${(quote.quote.totalCents / 100).toFixed(2)} USD\n`
         );
       return;
     }
     const requestOnly = command === 'request' || !quote.available;
     process.stderr.write(
-      `\n${terminalText(input.venue)}, ${terminalText(input.address)}, ${terminalText(input.city)}\n${terminalText(input.startsAt)} for ${input.hours} hours\n${requestOnly ? 'City request only. No checkout or charge.' : `Total: $${(quote.quote.totalCents / 100).toFixed(2)} USD, fees included. Pay by ${quote.paymentDeadline}.`}\n${terminalText(quote.message)}\n`
+      `\n${terminalText(input.venue)}, ${terminalText(input.address)}, ${terminalText(input.city)}\n${formatLocalTime(input.startsAt, timezone)} for ${input.hours} hours\n${requestOnly ? 'City request only. No checkout or charge.' : `Total: $${(quote.quote.totalCents / 100).toFixed(2)} USD, fees included. Pay by ${formatLocalTime(quote.paymentDeadline, timezone)}.`}\n${terminalText(quote.message)}\n`
     );
     if (!flags.yes) {
       if (!prompt)

@@ -8,7 +8,15 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { apiBase, loadOrder, saveOrder, terminalText } from '../src/cli.js';
+import {
+  apiBase,
+  collectInput,
+  loadOrder,
+  saveOrder,
+  terminalText,
+} from '../src/cli.js';
+
+const cities = [{ id: 'nyc', name: 'New York', timezone: 'America/New_York' }];
 
 test('accepts production HTTPS and local HTTP, rejects unsafe bases', () => {
   assert.equal(apiBase(), 'https://rentahuman.ai');
@@ -54,6 +62,11 @@ test('recovers a failed checkout using the saved capability and original server'
   const calls = [];
   let attempts = 0;
   const server = createServer(async (request, response) => {
+    if (request.method === 'GET') {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ success: true, cities }));
+      return;
+    }
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
     const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
@@ -95,7 +108,9 @@ test('recovers a failed checkout using the saved capability and original server'
       new URL('../bin/rentahuman-line.js', import.meta.url)
     );
     const run = promisify(execFile);
-    const options = { env: { ...process.env, RENTAHUMAN_API_URL: base } };
+    const options = {
+      env: { ...process.env, TZ: 'Asia/Tokyo', RENTAHUMAN_API_URL: base },
+    };
     await assert.rejects(
       run(
         process.execPath,
@@ -108,8 +123,10 @@ test('recovers a failed checkout using the saved capability and original server'
           'Venue',
           '--address',
           '123 Main Street',
-          '--start',
-          '2026-10-01T13:00Z',
+          '--date',
+          '2026-10-01',
+          '--time',
+          '9am',
           '--hours',
           '2',
           '--name',
@@ -130,6 +147,7 @@ test('recovers a failed checkout using the saved capability and original server'
       /Temporary checkout interruption/
     );
     const saved = await loadOrder(path);
+    assert.equal(saved.input.startsAt, '2026-10-01T13:00:00Z');
     assert.equal(saved.base, base);
     assert.equal((await stat(path)).mode & 0o777, 0o600);
     const resumed = await run(
@@ -155,4 +173,100 @@ test('recovers a failed checkout using the saved capability and original server'
     await new Promise((resolve) => server.close(resolve));
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('prompts for local date and time without asking for an offset', async () => {
+  const labels = [];
+  const answers = [
+    'NYC',
+    'Venue',
+    '123 Main Street',
+    '2026-10-01',
+    '2:30pm',
+    '2',
+    'Guest',
+    'guest@example.com',
+    '+12125551234',
+    'Meet at entrance',
+  ];
+  const result = await collectInput(
+    {},
+    {
+      question: async (label) => {
+        labels.push(label);
+        return answers.shift();
+      },
+    },
+    cities
+  );
+  assert.equal(result.input.startsAt, '2026-10-01T18:30:00Z');
+  assert.equal(result.timezone, 'America/New_York');
+  assert.match(labels[3], /Date in NYC/);
+  assert.match(labels[4], /Local start time in NYC/);
+  assert.ok(labels.every((label) => !/UTC|offset|Timezone/.test(label)));
+});
+
+test('accepts local --start, preserves legacy timestamps, and requires a zone for other cities', async () => {
+  const flags = {
+    city: 'nyc',
+    venue: 'Venue',
+    address: '123 Main Street',
+    hours: '2',
+    name: 'Guest',
+    email: 'guest@example.com',
+    phone: '+12125551234',
+    handoff: 'Meet at entrance',
+  };
+  for (const start of ['2026-10-01 9am', '2026-10-01T09:00']) {
+    assert.equal(
+      (await collectInput({ ...flags, start }, null, cities)).input.startsAt,
+      '2026-10-01T13:00:00Z'
+    );
+  }
+  for (const start of ['2026-10-01T09:00-04:00', '2026-10-01T13:00Z']) {
+    assert.equal(
+      (await collectInput({ ...flags, start }, null, cities)).input.startsAt,
+      start
+    );
+  }
+  await assert.rejects(
+    collectInput(
+      { ...flags, start: '2026-10-01 9am', date: '2026-10-02' },
+      null,
+      cities
+    ),
+    /either --start/
+  );
+  await assert.rejects(
+    collectInput(
+      {
+        ...flags,
+        date: '2026-10-01',
+        time: '9am',
+        timezone: 'America/Los_Angeles',
+      },
+      null,
+      cities
+    ),
+    /omit --timezone/
+  );
+  const other = { ...flags, city: 'Montreal', date: '2026-10-01', time: '9am' };
+  await assert.rejects(
+    collectInput(other, null, cities),
+    /--timezone is required/
+  );
+  await assert.rejects(
+    collectInput({ ...other, timezone: 'Moon/Base' }, null, cities),
+    /Unknown timezone/
+  );
+  assert.equal(
+    (
+      await collectInput(
+        { ...other, timezone: 'America/Montreal' },
+        null,
+        cities
+      )
+    ).input.startsAt,
+    '2026-10-01T13:00:00Z'
+  );
 });
