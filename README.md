@@ -26,7 +26,7 @@ The CLI prompts for the city, venue, street address, date, local start time, dur
 
 ## Non-interactive booking
 
-Choose a date **at least 24 hours in the future**, within 30 days. Pay at least 24 hours before the scheduled start. Enter the time as it appears on a clock in the selected city; no UTC conversion is needed.
+Choose a date **at least 12 hours in the future**, within 30 days. Pay at least 12 hours before the scheduled start. Enter the time as it appears on a clock in the selected city; no UTC conversion is needed.
 
 ```sh
 rentahuman-line book \
@@ -39,7 +39,7 @@ rentahuman-line book \
 
 Replace the example date and venue with your actual booking. Use `quote` instead of `book` to validate details and inspect pricing without creating an order. `--yes` prepares a payment link; it does not charge a card.
 
-You can also use `--start "Saturday Sep 12th 1pm"`, `--start "2026-10-01 9am"`, or `--start "tomorrow 2:30pm"` instead of `--date` and `--time`. Dates accept month names (short or full), an optional weekday, an optional year, `YYYY-MM-DD`, `today`, or `tomorrow`. For example, `Sat, Sept. 12th, 2026` works. An included weekday must match the date. Without a year, a written date means the next occurrence of that calendar date, including today, in the selected city. The confirmation always shows the full date and year. Times accept AM/PM or 24-hour format such as `14:30`. The 24-hour minimum and 30-day maximum still apply, including to `tomorrow` and dates without a year.
+You can also use `--start "Saturday Sep 12th 1pm"`, `--start "2026-10-01 9am"`, or `--start "tomorrow 2:30pm"` instead of `--date` and `--time`. Dates accept month names (short or full), an optional weekday, an optional year, `YYYY-MM-DD`, `today`, or `tomorrow`. For example, `Sat, Sept. 12th, 2026` works. An included weekday must match the date. Without a year, a written date means the next occurrence of that calendar date, including today, in the selected city. The confirmation always shows the full date and year. Times accept AM/PM or 24-hour format such as `14:30`. The 12-hour minimum and 30-day maximum still apply, including to `tomorrow` and dates without a year.
 
 Daylight-saving changes are handled automatically. If a local time is skipped or occurs twice during a clock change, the CLI tells you to choose a different time instead of guessing. Existing `--start` timestamps with an explicit offset or `Z` remain supported for scripts and precise clock-change scheduling.
 
