@@ -33,7 +33,7 @@ Booking flags (missing values are prompted in an interactive terminal):
   --json                        Machine-readable response
   --order /path/to/order.json    Save to or load this private order file
 
-$20 USD/hour total, fees included. Book and pay at least 24 hours ahead.
+$20 USD/hour total, fees included. Book and pay at least 12 hours ahead.
 1–12 hours, in 30-minute increments; dates up to 30 days ahead.
 NYC, Vancouver, Los Angeles, San Francisco, Toronto. Other cities by request.
 Dates and times use the selected city's timezone, not your computer's.
@@ -199,7 +199,7 @@ export async function collectInput(flags, prompt, cities) {
       do {
         const date = await ask(
           'date',
-          `Date in ${values.city} (September 12, YYYY-MM-DD, or tomorrow; at least 24 hours ahead)`
+          `Date in ${values.city} (September 12, YYYY-MM-DD, or tomorrow; at least 12 hours ahead)`
         );
         const time = await ask(
           'time',
@@ -331,7 +331,7 @@ export async function main(args = process.argv.slice(2)) {
     if (flags.json) printResult(data, true);
     else {
       process.stdout.write(
-        '$20 USD/hour total, fees included. Pay at least 24 hours ahead.\n'
+        '$20 USD/hour total, fees included. Pay at least 12 hours ahead.\n'
       );
       for (const city of data.cities)
         process.stdout.write(

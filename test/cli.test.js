@@ -78,7 +78,7 @@ test('recovers a failed checkout using the saved capability and original server'
           success: true,
           available: true,
           quote: { totalCents: 4000 },
-          paymentDeadline: '2026-09-30T13:00Z',
+          paymentDeadline: '2026-10-01T01:00Z',
           message: 'Pay to start recruitment.',
         })
       );
@@ -202,6 +202,7 @@ test('prompts for local date and time without asking for an offset', async () =>
   assert.equal(result.input.startsAt, '2026-10-01T18:30:00Z');
   assert.equal(result.timezone, 'America/New_York');
   assert.match(labels[3], /Date in NYC/);
+  assert.match(labels[3], /at least 12 hours ahead/);
   assert.match(labels[4], /Local start time in NYC/);
   assert.ok(labels.every((label) => !/UTC|offset|Timezone/.test(label)));
 });
