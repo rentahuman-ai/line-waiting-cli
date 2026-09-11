@@ -9,6 +9,68 @@ const CITY_ALIASES = {
   sf: 'san-francisco',
 };
 
+const MONTHS = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+];
+const WEEKDAYS = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+];
+const DATE_HINT =
+  'Enter a valid date like September 12, Saturday Sep 12th, YYYY-MM-DD, today, or tomorrow.';
+
+function writtenDate(value, today) {
+  const words = value.replace(/[,.]/g, ' ').trim().split(/\s+/);
+  const weekday = WEEKDAYS.findIndex(
+    (day) => words[0] === day || words[0] === day.slice(0, 3)
+  );
+  if (weekday >= 0) words.shift();
+  const match = /^([a-z]+) (\d{1,2})(?:st|nd|rd|th)?(?: (\d{4}))?$/.exec(
+    words.join(' ')
+  );
+  if (!match) return value;
+  const month = MONTHS.findIndex(
+    (name) =>
+      match[1] === name ||
+      match[1] === name.slice(0, 3) ||
+      (name === 'september' && match[1] === 'sept')
+  );
+  if (month < 0) throw new Error(DATE_HINT);
+  const monthDay = `${String(month + 1).padStart(2, '0')}-${match[2].padStart(2, '0')}`;
+  let year = match[3] ?? today.slice(0, 4);
+  // A yearless date means its next calendar occurrence in the destination city.
+  if (!match[3] && `${year}-${monthDay}` < today)
+    year = String(Number(year) + 1);
+  const date = `${year}-${monthDay}`;
+  const instant = new Date(`${date}T00:00:00Z`);
+  if (
+    !Number.isFinite(instant.getTime()) ||
+    instant.toISOString().slice(0, 10) !== date
+  )
+    throw new Error(DATE_HINT);
+  if (weekday >= 0 && instant.getUTCDay() !== weekday)
+    throw new Error(
+      `The weekday does not match: ${date} is ${WEEKDAYS[instant.getUTCDay()]}. Correct the weekday or the date.`
+    );
+  return date;
+}
+
 export function cityTimezone(value, cities) {
   const name = value.trim().toLowerCase();
   return cities.find(
@@ -61,6 +123,8 @@ export function localStart(dateText, timeText, timezone, now = new Date()) {
     const today = new Date(`${wallTime(now).slice(0, 10)}T00:00:00Z`);
     if (date === 'tomorrow') today.setUTCDate(today.getUTCDate() + 1);
     date = today.toISOString().slice(0, 10);
+  } else {
+    date = writtenDate(date, wallTime(now).slice(0, 10));
   }
   const time = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i.exec(timeText.trim());
   if (!time) throw new Error('Enter a time like 9am, 2:30pm, or 14:30.');
@@ -77,7 +141,7 @@ export function localStart(dateText, timeText, timezone, now = new Date()) {
     !Number.isFinite(nominal) ||
     new Date(nominal).toISOString().slice(0, 16) !== local
   )
-    throw new Error('Enter a valid date as YYYY-MM-DD, today, or tomorrow.');
+    throw new Error(DATE_HINT);
 
   // Sample both sides of a clock change, then require an exact local-time match.
   // Never let the computer's timezone or Date's DST normalization pick the booking.

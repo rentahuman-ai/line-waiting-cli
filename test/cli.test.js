@@ -217,7 +217,11 @@ test('accepts local --start, preserves legacy timestamps, and requires a zone fo
     phone: '+12125551234',
     handoff: 'Meet at entrance',
   };
-  for (const start of ['2026-10-01 9am', '2026-10-01T09:00']) {
+  for (const start of [
+    '2026-10-01 9am',
+    '2026-10-01T09:00',
+    'Thursday October 1st, 2026 9am',
+  ]) {
     assert.equal(
       (await collectInput({ ...flags, start }, null, cities)).input.startsAt,
       '2026-10-01T13:00:00Z'
@@ -269,4 +273,45 @@ test('accepts local --start, preserves legacy timestamps, and requires a zone fo
     ).input.startsAt,
     '2026-10-01T13:00:00Z'
   );
+});
+
+test('lets an interactive user correct a written date without re-entering the venue', async (t) => {
+  const labels = [];
+  const answers = [
+    'Sunday Sep 12th, 2026',
+    '1:00pm',
+    'Saturday Sep 12th, 2026',
+    '1:00pm',
+  ];
+  const errors = [];
+  t.mock.method(process.stderr, 'write', (value) => {
+    errors.push(value);
+    return true;
+  });
+  const result = await collectInput(
+    {
+      city: 'NYC',
+      venue: 'Katz Delicatessen',
+      address: '205 E Houston St, New York, NY 10002',
+      hours: '2',
+      name: 'Guest',
+      email: 'guest@example.com',
+      phone: '+12125551234',
+      handoff: 'Meet at the entrance.',
+    },
+    {
+      question: async (label) => {
+        labels.push(label);
+        return answers.shift();
+      },
+    },
+    cities
+  );
+  assert.equal(result.input.startsAt, '2026-09-12T17:00:00Z');
+  assert.equal(result.input.venue, 'Katz Delicatessen');
+  assert.equal(labels.length, 4);
+  assert.ok(
+    labels.every((label) => /Date in NYC|Local start time in NYC/.test(label))
+  );
+  assert.match(errors.join(''), /weekday does not match/);
 });

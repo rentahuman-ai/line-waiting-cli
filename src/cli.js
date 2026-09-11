@@ -37,7 +37,8 @@ $20 USD/hour total, fees included. Book and pay at least 24 hours ahead.
 1–12 hours, in 30-minute increments; dates up to 30 days ahead.
 NYC, Vancouver, Los Angeles, San Francisco, Toronto. Other cities by request.
 Dates and times use the selected city's timezone, not your computer's.
-Use YYYY-MM-DD, today, or tomorrow; times like 9am, 2:30pm, or 14:30.
+Use September 12, Saturday Sep 12th, YYYY-MM-DD, today, or tomorrow.
+Times accept 9am, 2:30pm, or 14:30. Optional weekdays must match the date.
 Existing --start timestamps with an explicit UTC offset or Z still work.
 No login or subscription. Pay once in hosted checkout. No extra hours or
 purchases are authorized. Payment starts recruitment; a worker must confirm.
@@ -195,15 +196,25 @@ export async function collectInput(flags, prompt, cities) {
         );
       startsAt = localStart(start[1], start[2], timezone);
     } else {
-      const date = await ask(
-        'date',
-        `Date in ${values.city} (YYYY-MM-DD or tomorrow; at least 24 hours ahead)`
-      );
-      const time = await ask(
-        'time',
-        `Local start time in ${values.city} (9am, 2:30pm, or 14:30)`
-      );
-      startsAt = localStart(date, time, timezone);
+      do {
+        const date = await ask(
+          'date',
+          `Date in ${values.city} (September 12, YYYY-MM-DD, or tomorrow; at least 24 hours ahead)`
+        );
+        const time = await ask(
+          'time',
+          `Local start time in ${values.city} (9am, 2:30pm, or 14:30)`
+        );
+        try {
+          startsAt = localStart(date, time, timezone);
+        } catch (error) {
+          if (!prompt || flags.date !== undefined || flags.time !== undefined)
+            throw error;
+          process.stderr.write(
+            `${terminalText(error.message)}\nPlease try the date and time again.\n`
+          );
+        }
+      } while (!startsAt);
     }
   }
   for (const [key, label] of [

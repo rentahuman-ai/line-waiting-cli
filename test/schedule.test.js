@@ -3,6 +3,61 @@ import { test } from 'node:test';
 
 import { cityTimezone, formatLocalTime, localStart } from '../src/schedule.js';
 
+test('accepts the reported written date and common month-name variants', () => {
+  const now = new Date('2026-09-11T12:00:00Z');
+  for (const date of [
+    'Saturday Sep 12th',
+    'Sat, Sept. 12th',
+    'September 12',
+    'September 12, 2026',
+    'sAtUrDaY   sEpTeMbEr 12TH 2026',
+  ]) {
+    assert.equal(
+      localStart(date, '1:00pm', 'America/New_York', now),
+      '2026-09-12T17:00:00Z'
+    );
+  }
+});
+
+test('rejects weekday mismatches and invalid written calendar dates', () => {
+  const now = new Date('2026-09-11T12:00:00Z');
+  assert.throws(
+    () => localStart('Sunday Sep 12th', '1pm', 'America/New_York', now),
+    /weekday.*does not match/i
+  );
+  for (const date of [
+    'February 29, 2026',
+    'April 31st',
+    'Septober 12',
+    'September 0',
+    'September 32',
+  ])
+    assert.throws(
+      () => localStart(date, '1pm', 'America/New_York', now),
+      /valid date/
+    );
+  assert.equal(
+    localStart('Tuesday February 29, 2028', '1pm', 'America/New_York', now),
+    '2028-02-29T18:00:00Z'
+  );
+});
+
+test('infers the next calendar occurrence using the destination date, without changing explicit years', () => {
+  const now = new Date('2027-01-01T02:00:00Z'); // December 31 in New York.
+  assert.equal(
+    localStart('December 31', '11pm', 'America/New_York', now),
+    '2027-01-01T04:00:00Z'
+  );
+  assert.equal(
+    localStart('Friday January 1st', '1pm', 'America/New_York', now),
+    '2027-01-01T18:00:00Z'
+  );
+  assert.equal(
+    localStart('January 1, 2026', '1pm', 'America/New_York', now),
+    '2026-01-01T18:00:00Z'
+  );
+});
+
 test('uses each destination timezone in summer and winter', () => {
   for (const [timezone, summer, winter] of [
     ['America/New_York', 13, 14],
