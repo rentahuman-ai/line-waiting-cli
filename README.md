@@ -4,6 +4,8 @@ Book someone to wait in line from your terminal. **$20 USD/hour total**, includi
 
 Available in **New York City, Vancouver, Los Angeles, San Francisco, and Toronto**. Other cities are available **by request** and are not charged automatically.
 
+For pricing, supported locations, venue rules, and booking options, see the [RentAHuman line-standing service](https://rentahuman.ai/services/line-standing).
+
 ## Run
 
 Requires Node.js 22 or newer (or Bun).
